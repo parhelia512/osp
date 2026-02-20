@@ -1,0 +1,123 @@
+diff --git a/configure.ac b/configure.ac
+index c76c460..39f1d36 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -95,33 +95,44 @@ want_tls="yes"
+ want_gnutls="yes"
+ want_openssl="no"
+ want_libtls="no"
++want_wolfssl="no"
+ tls_CFLAGS=""
+ tls_LIBS=""
+ with_ssl_was_used=no
+-AC_ARG_WITH([tls], [AS_HELP_STRING([--with-tls=[gnutls|openssl|libtls|no]],
+-    [TLS support: GnuTLS (default), OpenSSL (discouraged), libtls, or none.])],
++AC_ARG_WITH([tls], [AS_HELP_STRING([--with-tls=[gnutls|openssl|wolfssl|libtls|no]],
++    [TLS support: GnuTLS (default), OpenSSL (discouraged), wolfSSL, libtls, or none.])],
+     if test "$withval" = "gnutls"; then
+ 	want_tls=yes
+ 	want_gnutls=yes
+ 	want_openssl=no
+ 	want_libtls=no
++	want_wolfssl=no
+     elif test "$withval" = "openssl"; then
+ 	want_tls=yes
+ 	want_gnutls=no
+ 	want_openssl=yes
+ 	want_libtls=no
++	want_wolfssl=no
++    elif test "$withval" = "wolfssl"; then
++	want_tls=yes
++	want_gnutls=no
++	want_openssl=no
++	want_libtls=no
++	want_wolfssl=yes
+     elif test "$withval" = "libtls"; then
+ 	want_tls=yes
+ 	want_gnutls=no
+ 	want_openssl=no
+ 	want_libtls=yes
++	want_wolfssl=no
+     elif test "$withval" = "no"; then
+ 	want_tls=no
+ 	want_gnutls=no
+ 	want_openssl=no
+ 	want_libtls=no
++	want_wolfssl=no
+     else
+-	AC_MSG_ERROR([Use --with-tls=gnutls or --with-tls=openssl or --with-tls=libtls or --with-tls=no])
++	AC_MSG_ERROR([Use --with-tls=gnutls or --with-tls=openssl or --with-tls=wolfssl or --with-tls=libtls or --with-tls=no])
+     fi)
+ if test "$want_gnutls" = "yes"; then
+     PKG_CHECK_MODULES([libgnutls], [gnutls >= 3.7.2], [HAVE_LIBGNUTLS=1], [HAVE_LIBGNUTLS=0])
+@@ -166,6 +177,21 @@ if test "$want_libtls" = "yes" -a "$have_tls" = "no"; then
+ 	AC_DEFINE([HAVE_LIBTLS], [1], [Define to 1 if libtls is available])
+     fi
+ fi
++if test "$want_wolfssl" = "yes" -a "$have_tls" = "no"; then
++    PKG_CHECK_MODULES([libwolfssl], [wolfssl >= 0.0], [HAVE_LIBWOLFSSL=1], [HAVE_LIBWOLFSSL=0])
++    if test "$HAVE_LIBWOLFSSL" != "1"; then
++        AC_MSG_WARN([library libwolfssl not found:])
++        AC_MSG_WARN([$libwolfssl_PKG_ERRORS])
++        AC_MSG_WARN([libwolfssl is provided by wolfSSL])
++    else
++	have_tls="yes"
++	tls_lib="wolfSSL"
++	wolfssl_includedir=`$PKG_CONFIG --variable=includedir wolfssl`
++	tls_CFLAGS="$libwolfssl_CFLAGS -I${wolfssl_includedir}/wolfssl -DWOLFSSL_USE_OPTIONS_H"
++	tls_LIBS="$libwolfssl_LIBS"
++	AC_DEFINE([HAVE_LIBWOLFSSL], [1], [Define to 1 if libwolfssl is available])
++    fi
++fi
+ if test "$have_tls" = "yes"; then
+     AC_DEFINE([HAVE_TLS], [1], [Define to 1 to build with TLS/SSL support])
+ elif test "$want_tls" = "yes"; then
+@@ -175,6 +201,7 @@ AM_CONDITIONAL([HAVE_TLS], [test "$have_tls" = "yes"])
+ AM_CONDITIONAL([HAVE_GNUTLS], [test "$tls_lib" = "GnuTLS"])
+ AM_CONDITIONAL([HAVE_OPENSSL], [test "$tls_lib" = "OpenSSL"])
+ AM_CONDITIONAL([HAVE_LIBTLS], [test "$tls_lib" = "libtls"])
++AM_CONDITIONAL([HAVE_WOLFSSL], [test "$tls_lib" = "wolfSSL"])
+ AC_SUBST([tls_CFLAGS])
+ AC_SUBST([tls_LIBS])
+ 
+diff --git a/src/Makefile.am b/src/Makefile.am
+index fcd18e3..0313014 100644
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -32,6 +32,9 @@ endif
+ if HAVE_LIBTLS
+ msmtp_SOURCES += mtls-libtls.c
+ endif
++if HAVE_WOLFSSL
++msmtp_SOURCES += mtls-openssl.c
++endif
+ 
+ AM_CPPFLAGS = $(tls_CFLAGS) $(libgsasl_CFLAGS) $(libidn2_CFLAGS) $(libsecret_CFLAGS)
+ 
+diff --git a/src/mtls-openssl.c b/src/mtls-openssl.c
+index 976d72b..9c05351 100644
+--- a/src/mtls-openssl.c
++++ b/src/mtls-openssl.c
+@@ -41,9 +41,13 @@
+ #include <openssl/rand.h>
+ #include <openssl/evp.h>
+ #if OPENSSL_VERSION_NUMBER < 0x10100000L
++#ifndef X509_get0_notBefore
+ #define X509_get0_notBefore X509_get_notBefore
++#endif
++#ifndef X509_get0_notAfter
+ #define X509_get0_notAfter X509_get_notAfter
+ #endif
++#endif
+ 
+ #ifdef HAVE_LIBIDN
+ # include <idn2.h>
+@@ -139,7 +143,7 @@ int mtls_lib_init(char **errstr)
+ {
+     int e;
+ 
+-#if OPENSSL_VERSION_NUMBER < 0x10100000L
++#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(HAVE_LIBWOLFSSL)
+     SSL_load_error_strings();
+     SSL_library_init();
+ #endif
