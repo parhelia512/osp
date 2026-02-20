@@ -6,9 +6,9 @@
 + Install wolfSSL into /usr/local with `sudo make install`.
 
 ### Build NTP
-+ Download ntp 4.2.8p17 with `curl -O http://www.eecis.udel.edu/~ntp/ntp_spool/ntp4/ntp-4.2/ntp-4.2.8p17.tar.gz`.
-+ Unarchive ntp-4.2.8p17.tar.gz with `tar xvf ntp-4.2.8p17.tar.gz`. cd into ntp-4.2.8p17.
-+ Patch the source code with `patch -p1 < ntp-4.2.8p17.patch`, adjusting the path to the patch file accordingly. 
++ Download ntp 4.2.8p18 with `curl -O http://www.eecis.udel.edu/~ntp/ntp_spool/ntp4/ntp-4.2/ntp-4.2.8p18.tar.gz`.
++ Unarchive ntp-4.2.8p18.tar.gz with `tar xvf ntp-4.2.8p18.tar.gz`. cd into ntp-4.2.8p18.
++ Patch the source code with `patch -p1 < ntp-4.2.8p18.patch`, adjusting the path to the patch file accordingly. 
 + Regenerate the configure script with `./bootstrap`.
 + Configure ntp with `./configure --with-wolfssl=/usr/local`.
 + Compile with `make`.
