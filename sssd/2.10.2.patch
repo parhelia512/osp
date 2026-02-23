@@ -1,0 +1,161 @@
+From 1803226238c6e065e8a5373f09dfcf5e00549d06 Mon Sep 17 00:00:00 2001
+From: Juliusz Sosinowicz <juliusz@wolfssl.com>
+Date: Mon, 23 Feb 2026 16:50:00 +0100
+Subject: [PATCH] Patch for wolfSSL
+
+This patch implements wolfSSL support in sssd.
+
+Compile wolfSSL with:
+  ./configure --enable-all CFLAGS=-DWOLFSSL_NO_ASN_STRICT
+  make
+  make install
+
+Compile sssd with:
+  patch -p1 < /path/to/this/patch
+  autoreconf -if
+  ./configure --without-samba --without-nfsv4-idmapd-plugin --with-oidc-child=no --without-manpages WOLFSSL_INSTALL_DIR=/path/to/wolfssl/lib --with-softhsm2=/path/to/softhsm/install
+  make
+
+All tests should pass:
+  make check
+---
+ configure.ac                                 |  8 +++++++-
+ src/external/test_ca.m4                      | 14 ++++++++++++--
+ src/lib/certmap/sss_cert_content_crypto.c    |  4 ++++
+ src/p11_child/p11_child_openssl.c            |  4 ++++
+ src/tests/cmocka/test_certmap.c              |  4 ++++
+ src/util/crypto/libcrypto/crypto_hmac_sha1.c |  1 +
+ 6 files changed, 32 insertions(+), 3 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 90cb1f3ece..633b385c14 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -428,7 +428,13 @@ AS_IF([test x$syslog = xjournald], [
+     AM_CHECK_JOURNALD
+ ])
+ 
+-AM_CHECK_LIBCRYPTO
++
++AS_IF([test -z $WOLFSSL_INSTALL_DIR || test ! -d $WOLFSSL_INSTALL_DIR ], [
++    WOLFSSL_INSTALL_DIR=/usr/local
++])
++CFLAGS="$CFLAGS -I$WOLFSSL_INSTALL_DIR/include -I$WOLFSSL_INSTALL_DIR/include/wolfssl -DEXTERNAL_OPTS_OPENVPN"
++LIBS="$LIBS -lwolfssl -L$WOLFSSL_INSTALL_DIR/lib"
++
+ m4_include([src/external/p11-kit.m4])
+ 
+ AM_CHECK_INOTIFY
+diff --git a/src/external/test_ca.m4 b/src/external/test_ca.m4
+index a1b77d7570..e89083ca08 100644
+--- a/src/external/test_ca.m4
++++ b/src/external/test_ca.m4
+@@ -19,7 +19,16 @@ AC_DEFUN([AM_CHECK_TEST_CA],
+         fi
+     fi
+ 
+-    for p in "$(eval echo ${libdir})"/softhsm/libsofthsm2.so \
++    AC_ARG_WITH([softhsm2],
++                [AS_HELP_STRING([--with-softhsm2=DIR],
++                                [root directory of softhsm2 installation])],
++                [with_softhsm2="$withval"],
++                [with_softhsm2=""])
++
++    for p in ${with_softhsm2:+"${with_softhsm2}/lib/softhsm/libsofthsm2.so"} \
++             ${with_softhsm2:+"${with_softhsm2}/lib/pkcs11/libsofthsm2.so"} \
++             ${with_softhsm2:+"${with_softhsm2}/lib64/softhsm/libsofthsm2.so"} \
++             "$(eval echo ${libdir})"/softhsm/libsofthsm2.so \
+              "$(eval echo ${libdir})"/pkcs11/libsofthsm2.so \
+              /usr/lib*/pkcs11/libsofthsm2.so \
+              /usr/lib/*-linux-gnu*/softhsm/libsofthsm2.so \
+@@ -38,7 +47,8 @@ AC_DEFUN([AM_CHECK_TEST_CA],
+         AC_MSG_NOTICE([Could not find softhsm2 PKCS11 module])
+     fi
+ 
+-    AC_PATH_PROG([SOFTHSM2_UTIL], [softhsm2-util])
++    AC_PATH_PROG([SOFTHSM2_UTIL], [softhsm2-util], [],
++                 [$with_softhsm2/bin$PATH_SEPARATOR$PATH])
+     if test ! -x "$SOFTHSM2_UTIL"; then
+         AC_MSG_NOTICE([Could not find softhsm2-util])
+     fi
+diff --git a/src/lib/certmap/sss_cert_content_crypto.c b/src/lib/certmap/sss_cert_content_crypto.c
+index e73f1f35a7..9d422117cb 100644
+--- a/src/lib/certmap/sss_cert_content_crypto.c
++++ b/src/lib/certmap/sss_cert_content_crypto.c
+@@ -227,12 +227,14 @@ done:
+     return ret;
+ }
+ 
++#ifndef LIBWOLFSSL_VERSION_HEX
+ void *ASN1_TYPE_unpack_sequence(const ASN1_ITEM *it, const ASN1_TYPE *t)
+ {
+     if (t == NULL || t->type != V_ASN1_SEQUENCE || t->value.sequence == NULL)
+         return NULL;
+     return ASN1_item_unpack(t->value.sequence, it);
+ }
++#endif
+ 
+ static int add_pkinit_princ_to_san_list(TALLOC_CTX *mem_ctx,
+                                         enum san_opt san_opt,
+@@ -697,6 +699,7 @@ static int get_san(TALLOC_CTX *mem_ctx, X509 *cert, struct san_list **san_list)
+             }
+             DLIST_ADD(list, item);
+             break;
++#ifndef LIBWOLFSSL_VERSION_HEX
+         case GEN_EDIPARTY:
+             len = i2d_EDIPARTYNAME(current->d.ediPartyName, NULL);
+             if (len <= 0) {
+@@ -724,6 +727,7 @@ static int get_san(TALLOC_CTX *mem_ctx, X509 *cert, struct san_list **san_list)
+             }
+             DLIST_ADD(list, item);
+             break;
++#endif
+         default:
+             ret = EINVAL;
+             goto done;
+diff --git a/src/p11_child/p11_child_openssl.c b/src/p11_child/p11_child_openssl.c
+index 41992637fd..15cfef0733 100644
+--- a/src/p11_child/p11_child_openssl.c
++++ b/src/p11_child/p11_child_openssl.c
+@@ -811,7 +811,11 @@ bool do_verification(struct p11_ctx *p11_ctx, X509 *cert)
+             X509_VERIFY_PARAM_clear_flags(verify_param, (X509_V_FLAG_CRL_CHECK
+                                                    |X509_V_FLAG_CRL_CHECK_ALL));
+ 
++            /* Temporarily disable CRL checking. verify param won't disable. */
++            wolfSSL_X509_STORE_set_flags(p11_ctx->x509_store, 0);
+             ret = X509_verify_cert(ctx);
++            wolfSSL_X509_STORE_set_flags(p11_ctx->x509_store,
++                    X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL);
+             if (ret != 1) {
+                 DEBUG(SSSDBG_OP_FAILURE,
+                       "X509_verify_cert failed [%d].\n", ret);
+diff --git a/src/tests/cmocka/test_certmap.c b/src/tests/cmocka/test_certmap.c
+index a15984d60b..7ded86e314 100644
+--- a/src/tests/cmocka/test_certmap.c
++++ b/src/tests/cmocka/test_certmap.c
+@@ -46,6 +46,10 @@
+ #define SSSD_TEST_CERT_0001 ""
+ #define SSSD_TEST_CERT_0003 ""
+ #define SSSD_TEST_CERT_0004 ""
++#define SSSD_TEST_CERT_SERIAL_0003 ""
++#define SSSD_TEST_CERT_DEC_SERIAL_0003 ""
++#define SSSD_TEST_CERT_SERIAL_0004 ""
++#define SSSD_TEST_CERT_DEC_SERIAL_0004 ""
+ #endif
+ 
+ struct priv_sss_debug {
+diff --git a/src/util/crypto/libcrypto/crypto_hmac_sha1.c b/src/util/crypto/libcrypto/crypto_hmac_sha1.c
+index 9b072ad9b5..580c272549 100644
+--- a/src/util/crypto/libcrypto/crypto_hmac_sha1.c
++++ b/src/util/crypto/libcrypto/crypto_hmac_sha1.c
+@@ -16,6 +16,7 @@
+ */
+ 
+ #include <string.h>
++#include <openssl/evp.h>
+ #include <openssl/hmac.h>
+ 
+ #include "util/util.h"
+-- 
+2.43.0
+
