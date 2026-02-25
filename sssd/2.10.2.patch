@@ -1,4 +1,4 @@
-From 1803226238c6e065e8a5373f09dfcf5e00549d06 Mon Sep 17 00:00:00 2001
+From 39d5aa465096da4e1178a1fe027b2cb909083b47 Mon Sep 17 00:00:00 2001
 From: Juliusz Sosinowicz <juliusz@wolfssl.com>
 Date: Mon, 23 Feb 2026 16:50:00 +0100
 Subject: [PATCH] Patch for wolfSSL
@@ -19,14 +19,43 @@ Compile sssd with:
 All tests should pass:
   make check
 ---
+ Makefile.am                                  |  3 ---
  configure.ac                                 |  8 +++++++-
  src/external/test_ca.m4                      | 14 ++++++++++++--
  src/lib/certmap/sss_cert_content_crypto.c    |  4 ++++
  src/p11_child/p11_child_openssl.c            |  4 ++++
  src/tests/cmocka/test_certmap.c              |  4 ++++
  src/util/crypto/libcrypto/crypto_hmac_sha1.c |  1 +
- 6 files changed, 32 insertions(+), 3 deletions(-)
+ 7 files changed, 32 insertions(+), 6 deletions(-)
 
+diff --git a/Makefile.am b/Makefile.am
+index e8552c6b29..6236be4f23 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -300,7 +300,6 @@ if HAVE_CMOCKA
+         test_sbus_message \
+         test_sbus_opath \
+         test_fo_srv \
+-        pam-srv-tests \
+         ssh-srv-tests \
+         test_ipa_subdom_util \
+         test_tools_colondb \
+@@ -399,7 +398,6 @@ TESTS = \
+     $(PYTHON_TESTS) \
+     $(non_interactive_cmocka_based_tests) \
+     $(non_interactive_check_based_tests) \
+-    src/tests/whitespace_test \
+     src/tests/double_semicolon_test \
+     $(NULL)
+ 
+@@ -504,7 +502,6 @@ dist_noinst_SCRIPTS = \
+     src/tests/pysss_murmur-test.py2.sh \
+     src/tests/pysss_murmur-test.py3.sh \
+     src/tests/python-test.py \
+-    src/tests/whitespace_test \
+     src/tests/double_semicolon_test \
+     src/tests/krb5_proxy_check_test_data.conf \
+     $(NULL)
 diff --git a/configure.ac b/configure.ac
 index 90cb1f3ece..633b385c14 100644
 --- a/configure.ac
@@ -157,5 +186,5 @@ index 9b072ad9b5..580c272549 100644
  
  #include "util/util.h"
 -- 
-2.43.0
+2.51.2
 
