@@ -1,4 +1,4 @@
-From 986369557b3ac4cfda652d44f7ea97bd7f89aec9 Mon Sep 17 00:00:00 2001
+From d57061887b1338b51e4ca5d1d0dbe3b53d3ee066 Mon Sep 17 00:00:00 2001
 From: Colton Willey <colton@wolfssl.com>
 Date: Tue, 23 Jun 2026 20:20:29 +0000
 Subject: [PATCH] wolfzfs patch: zfs-2.4.2
@@ -25,13 +25,20 @@ rebased from the cd06f79e2 port to 2.4.2 and extended:
 Validated on Proxmox VE 9.2 (zfs-2.4.2-pve1, kernel 7.0.12-1-pve) and the
 OpenZFS test suite (run_sanity, all failures within the known vanilla-ZFS
 environmental baseline, zero regressions).
+
+Userspace linking model: production userspace (zfs/zpool/zed via libzfs)
+links only libcrypto; its crypto (PBKDF2 key derivation, salt RNG) is
+provider-routed through OpenSSL 3.x, with no direct libwolfssl dependency.
+Direct libwolfssl linking in userspace is confined to libzpool/libicp
+consumers (zdb, zhack, ztest, zstream, raidz_test and the ICP test
+binaries), which compile the kernel ICP sources for the test harness and
+are not part of the production data or key path.
 ---
  Makefile.am                                |    2 +
  config/user-libcrypto.m4                   |    2 +-
  configure.ac                               |   10 +
  include/sys/sha2.h                         |   24 +-
  lib/libicp/Makefile.am                     |   30 +-
- lib/libzfs/Makefile.am                     |    2 +-
  lib/libzfs/libzfs_crypto.c                 |   82 +-
  lib/libzpool/Makefile.am                   |    2 +-
  module/Kbuild.in                           |   31 +-
@@ -68,7 +75,7 @@ environmental baseline, zero regressions).
  module/zfs/hkdf.c                          |  166 +-
  tests/zfs-tests/cmd/Makefile.am            |    4 +-
  tests/zfs-tests/cmd/crypto_test.c          |   27 +-
- 42 files changed, 885 insertions(+), 28608 deletions(-)
+ 41 files changed, 884 insertions(+), 28607 deletions(-)
  delete mode 100644 module/icp/algs/aes/aes_impl_generic.c
  delete mode 100644 module/icp/algs/aes/aes_impl_x86-64.c
  delete mode 100644 module/icp/algs/modes/gcm_generic.c
@@ -244,19 +251,6 @@ index 10c791ba2..12154122c 100644
  	module/icp/asm-x86_64/blake3/blake3_sse41.S
  endif
 -
-diff --git a/lib/libzfs/Makefile.am b/lib/libzfs/Makefile.am
-index 5ac6c0bca..e1ab726db 100644
---- a/lib/libzfs/Makefile.am
-+++ b/lib/libzfs/Makefile.am
-@@ -59,7 +59,7 @@ libzfs_la_LIBADD = \
- 	libzutil.la \
- 	libuutil.la
- 
--libzfs_la_LIBADD += -lrt -lm $(LIBCRYPTO_LIBS) $(ZLIB_LIBS) $(LIBFETCH_LIBS) $(LTLIBINTL)
-+libzfs_la_LIBADD += -lrt -lm $(LIBCRYPTO_LIBS) $(ZLIB_LIBS) $(LIBFETCH_LIBS) $(LTLIBINTL) -lwolfssl
- 
- libzfs_la_LDFLAGS = -pthread
- 
 diff --git a/lib/libzfs/libzfs_crypto.c b/lib/libzfs/libzfs_crypto.c
 index f7cc1e84f..d7464e896 100644
 --- a/lib/libzfs/libzfs_crypto.c
@@ -30761,5 +30755,5 @@ index c8d8622c7..8f3942642 100644
  
  	printf("%s: tests=%d: passed=%d failed=%d\n",
 -- 
-2.47.3
+2.43.0
 
