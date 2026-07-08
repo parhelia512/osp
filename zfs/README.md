@@ -7,15 +7,43 @@ kernel space.
 
 The patch was written for the OpenZFS `zfs-2.4.2` release tag:
 ```
-commit 59f46c509be4... (tag: zfs-2.4.2)
+commit 6330a45b... (tag: zfs-2.4.2)   # annotated tag object 59f46c50 -> this commit
 ```
-It applies cleanly to both upstream `zfs-2.4.2` and the Proxmox `zfs-2.4.2-pve1`
-package. This patch inserts only a modest line count for wolfCrypt API calls,
+This patch inserts only a modest line count for wolfCrypt API calls,
 while removing zfs internal crypto implementations:
 ```
 $ git diff --stat | tail -n1
  42 files changed, 885 insertions(+), 28608 deletions(-)
 ```
+
+### Patch layout (per distro / version)
+
+The wolfCrypt routing itself is distro-agnostic, but the source tree it applies
+onto is not: each distribution and version ships OpenZFS with its own packaging
+patches, so the wolfZFS patch is kept per target under `patches/<distro>/`:
+
+```
+patches/
+  debian/   zfs-2.4.2_wolfzfs.patch        # upstream OpenZFS zfs-2.4.2 tag (reference)
+  proxmox/  zfs-2.4.2-pve1_wolfzfs.patch   # Proxmox VE zfs-2.4.2-pve1 package
+```
+
+The `debian/` patch is the reference port, generated against the upstream
+`zfs-2.4.2` release tag. Pick the file that matches the ZFS source you are
+patching (see the "Build wolfZFS" step below).
+
+At `2.4.2` these two files are byte-identical. All three trees — the upstream
+`zfs-2.4.2` tag, Debian's `zfs-linux 2.4.2-1~bpo13+1`, and Proxmox's
+`zfs-2.4.2-pve1` — share the same OpenZFS 2.4.2 base (the annotated `zfs-2.4.2`
+tag, commit `6330a45b`); the distro packages add their own `debian/patches`
+(Debian 16, Proxmox 10) on top. None of those packaging patches touch any of the
+41 files the wolfZFS patch modifies, so the port applies to each with zero fuzz,
+verified with `git apply --check` against each reconstructed source tree. The
+files are kept separate because they are expected to diverge as distros and
+versions advance — newer ZFS is already in flight (Proxmox `zfs-2.4.3-pve1`;
+Debian `2.4.3-1` in testing/unstable, with `2.4.2-1~bpo13+1` still in
+trixie-backports), and divergence will first appear whenever a distro's
+packaging or an upstream refactor touches one of the files this patch modifies.
 
 In addition to the ICP routing, this revision folds in the FIPS-related fixes
 (previously proposed in PR #341, which this supersedes):
@@ -162,13 +190,16 @@ to point to your wolfssl src tree.
 git clone https://github.com/openzfs/zfs.git
 ```
 
-2. Patch OpenZFS:
+2. Patch OpenZFS with the patch for your target (see "Patch layout" above).
+   For the upstream OpenZFS `zfs-2.4.2` tree used here:
 ```
 cd zfs
 git checkout zfs-2.4.2
-git apply ../patches/zfs-2.4.2_wolfzfs.patch
+git apply ../patches/debian/zfs-2.4.2_wolfzfs.patch
 cd ../
 ```
+   On a Proxmox VE host, patch the `zfs-2.4.2-pve1` package source instead
+   (`apt source zfs-linux`), using `../patches/proxmox/zfs-2.4.2-pve1_wolfzfs.patch`.
 
 3. Build wolfzfs (patched OpenZFS):
 ```
