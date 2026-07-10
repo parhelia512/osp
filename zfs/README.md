@@ -5,18 +5,60 @@ that replaces its native crypto implementation (used on linux) with wolfCrypt
 API calls. It links against `libwolfssl.so` and `libwolfssl.ko` in user and
 kernel space.
 
-The patch was written for this commit:
+The patch was written for the OpenZFS `zfs-2.4.2` release tag:
 ```
-commit cd06f79e2949b6255f5e8bf621c1b9497ad97b02 (HEAD)
-Author: Christos Longros <98426896+chrislongros@users.noreply.github.com>
-Date:   Sun Apr 26 00:24:38 2026 +0200
+commit 6330a45b... (tag: zfs-2.4.2)   # annotated tag object 59f46c50 -> this commit
 ```
-This patch inserts only a modest line count for wolfCrypt API calls, while
-removing zfs internal crypto implementations:
+This patch inserts only a modest line count for wolfCrypt API calls,
+while removing zfs internal crypto implementations:
 ```
 $ git diff --stat | tail -n1
- 38 files changed, 821 insertions(+), 28583 deletions(-)
+ 42 files changed, 885 insertions(+), 28608 deletions(-)
 ```
+
+### Patch layout (per distro / version)
+
+The wolfCrypt routing itself is distro-agnostic, but the source tree it applies
+onto is not: each distribution and version ships OpenZFS with its own packaging
+patches, so the wolfZFS patch is kept per target under `patches/<distro>/`:
+
+```
+patches/
+  debian/   zfs-2.4.2_wolfzfs.patch        # upstream OpenZFS zfs-2.4.2 tag (reference)
+  proxmox/  zfs-2.4.2-pve1_wolfzfs.patch   # Proxmox VE zfs-2.4.2-pve1 package
+```
+
+The `debian/` patch is the reference port, generated against the upstream
+`zfs-2.4.2` release tag. Pick the file that matches the ZFS source you are
+patching (see the "Build wolfZFS" step below).
+
+At `2.4.2` these two files are byte-identical. All three trees — the upstream
+`zfs-2.4.2` tag, Debian's `zfs-linux 2.4.2-1~bpo13+1`, and Proxmox's
+`zfs-2.4.2-pve1` — share the same OpenZFS 2.4.2 base (the annotated `zfs-2.4.2`
+tag, commit `6330a45b`); the distro packages add their own `debian/patches`
+(Debian 16, Proxmox 10) on top. None of those packaging patches touch any of the
+41 files the wolfZFS patch modifies, so the port applies to each with zero fuzz,
+verified with `git apply --check` against each reconstructed source tree. The
+files are kept separate because they are expected to diverge as distros and
+versions advance — newer ZFS is already in flight (Proxmox `zfs-2.4.3-pve1`;
+Debian `2.4.3-1` in testing/unstable, with `2.4.2-1~bpo13+1` still in
+trixie-backports), and divergence will first appear whenever a distro's
+packaging or an upstream refactor touches one of the files this patch modifies.
+
+In addition to the ICP routing, this revision folds in the FIPS-related fixes
+(previously proposed in PR #341, which this supersedes):
+- `module/zfs/hkdf.c`: `PRIVATE_KEY_UNLOCK` bracket fixes
+  `FIPS_PRIVATE_KEY_LOCKED_E` (-287) on encrypted dataset creation under
+  wolfCrypt FIPS.
+- RNG: key, salt, and IV material use the kernel's native `random_get_bytes()`,
+  which is the wolfCrypt FIPS DRBG when the CRNG kernel patch is installed. The
+  only change vs vanilla ZFS is upgrading the two GCM-IV sites in `zio_crypt.c`
+  (`zio_crypt_key_wrap`, `zio_crypt_generate_iv`) from `random_get_pseudo_bytes`
+  to `random_get_bytes`, so the IVs come from the approved DRBG (SP 800-38D
+  requires GCM IVs from an approved RBG; the xorshift pseudo-RNG is not approved).
+- Userspace key-derivation uses the provider-native `EVP_KDF "PBKDF2"` with a
+  `RAND_bytes` salt, so it routes through an OpenSSL 3.x provider.
+- `MODULE_IMPORT_NS("WOLFSSL")` is quoted for kernel >= 6.13.
 
 ![wolfZFS Architecture Diagram](doc/wolfzfs_diagram.png)
 
@@ -148,13 +190,16 @@ to point to your wolfssl src tree.
 git clone https://github.com/openzfs/zfs.git
 ```
 
-2. Patch OpenZFS:
+2. Patch OpenZFS with the patch for your target (see "Patch layout" above).
+   For the upstream OpenZFS `zfs-2.4.2` tree used here:
 ```
 cd zfs
-git co cd06f79e2
-git apply ../patches/cd06f79e2_wolfzfs.patch
+git checkout zfs-2.4.2
+git apply ../patches/debian/zfs-2.4.2_wolfzfs.patch
 cd ../
 ```
+   On a Proxmox VE host, patch the `zfs-2.4.2-pve1` package source instead
+   (`apt source zfs-linux`), using `../patches/proxmox/zfs-2.4.2-pve1_wolfzfs.patch`.
 
 3. Build wolfzfs (patched OpenZFS):
 ```
