@@ -1,0 +1,23 @@
+diff --git a/lib/crypto_backend/crypto_openssl.c b/lib/crypto_backend/crypto_openssl.c
+--- a/lib/crypto_backend/crypto_openssl.c
++++ b/lib/crypto_backend/crypto_openssl.c
+@@ -163,12 +163,11 @@ static int openssl_backend_init(bool fips)
+ 			return -EINVAL;
+ 
+-		ossl_default = OSSL_PROVIDER_try_load(ossl_ctx, "default", 0);
++		ossl_default = OSSL_PROVIDER_try_load(ossl_ctx, "libwolfprov", 0);
+ 		if (!ossl_default) {
+ 			OSSL_LIB_CTX_free(ossl_ctx);
+ 			return -EINVAL;
+ 		}
+ 
+-		/* Optional */
+-		ossl_legacy = OSSL_PROVIDER_try_load(ossl_ctx, "legacy", 0);
++		ossl_legacy = ossl_default;
+ 	}
+ 
+@@ -180,3 +179,3 @@ static int openssl_backend_init(bool fips)
+ 		OpenSSL_version(OPENSSL_VERSION),
+-		ossl_default ? "[default]" : "",
++		ossl_default ? "[libwolfprov]" : "",
+ 		ossl_legacy  ? "[legacy]" : "",
