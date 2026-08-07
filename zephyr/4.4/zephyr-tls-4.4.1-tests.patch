@@ -1,9 +1,9 @@
 diff --git a/samples/net/sockets/echo_server/overlay-wolfssl.conf b/samples/net/sockets/echo_server/overlay-wolfssl.conf
 new file mode 100644
-index 00000000000..b3a539a5e0a
+index 00000000000..43870a21619
 --- /dev/null
 +++ b/samples/net/sockets/echo_server/overlay-wolfssl.conf
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,24 @@
 +# Copyright (c) 2026 wolfSSL Inc.
 +# SPDX-License-Identifier: Apache-2.0
 +
@@ -28,8 +28,6 @@ index 00000000000..b3a539a5e0a
 +CONFIG_WOLFSSL=y
 +CONFIG_WOLFSSL_DTLS=y
 +CONFIG_COMMON_LIBC_MALLOC_ARENA_SIZE=65536
-+
-+
 diff --git a/samples/net/sockets/echo_server/sample.yaml b/samples/net/sockets/echo_server/sample.yaml
 index c67d92b6334..5f7ce98b3e3 100644
 --- a/samples/net/sockets/echo_server/sample.yaml
@@ -117,7 +115,7 @@ index 00000000000..73f459c0974
 +CONFIG_WOLFSSL=y
 +CONFIG_COMMON_LIBC_MALLOC_ARENA_SIZE=65536
 diff --git a/tests/net/lib/http_server/tls/src/main.c b/tests/net/lib/http_server/tls/src/main.c
-index 2a26ff77377..35e2f61d22a 100644
+index 2a26ff77377..e55a8b8d603 100644
 --- a/tests/net/lib/http_server/tls/src/main.c
 +++ b/tests/net/lib/http_server/tls/src/main.c
 @@ -14,6 +14,9 @@
@@ -130,21 +128,16 @@ index 2a26ff77377..35e2f61d22a 100644
  
  LOG_MODULE_REGISTER(net_test, CONFIG_NET_SOCKETS_LOG_LEVEL);
  
-@@ -161,7 +164,12 @@ static void test_tls(void)
+@@ -161,7 +164,7 @@ static void test_tls(void)
  		const sec_tag_t *sec_tag_list;
  		size_t sec_tag_list_size;
  
 -		sec_tag_list_size = sizeof(sec_tag_list);
-+		/* sizeof(sec_tag_list_verify_none), not sizeof(sec_tag_list)
-+		 * — the latter is sizeof(pointer), which on 64-bit hosts
-+		 * (e.g. native_sim/native/64) feeds an extra garbage sec_tag
-+		 * into setsockopt and breaks credential lookup.
-+		 */
 +		sec_tag_list_size = sizeof(sec_tag_list_verify_none);
  		sec_tag_list = sec_tag_list_verify_none;
  
  		ret = zsock_setsockopt(client_fd, ZSOCK_SOL_TLS, ZSOCK_TLS_SEC_TAG_LIST,
-@@ -263,4 +271,37 @@ static void *setup(void)
+@@ -263,4 +266,37 @@ static void *setup(void)
  	return NULL;
  }
  
@@ -365,7 +358,7 @@ index 4b5a4a8d1a8..81d618309c3 100644
 +CONFIG_NET_CONTEXT_REUSEPORT=y
 diff --git a/tests/net/socket/tls/prj_wolfssl.conf b/tests/net/socket/tls/prj_wolfssl.conf
 new file mode 100644
-index 00000000000..c433e70a967
+index 00000000000..83f15457040
 --- /dev/null
 +++ b/tests/net/socket/tls/prj_wolfssl.conf
 @@ -0,0 +1,76 @@
@@ -378,7 +371,7 @@ index 00000000000..c433e70a967
 +# options that would have to be neutralized symbol-by-symbol here, and
 +# every upstream addition to prj.conf would break this scenario with a
 +# Kconfig warning. Keep the backend-neutral part below in sync with
-+# prj.conf when it changes — check_conf_sync.py in this directory
++# prj.conf when it changes - check_conf_sync.py in this directory
 +# verifies the two files and fails on drift.
 +
 +# Setup for self-contained net testing without requiring a SLIP driver
@@ -446,7 +439,7 @@ index 00000000000..c433e70a967
 +CONFIG_NET_SOCKETS_TLS_MAX_APP_PROTOCOLS=3
 +CONFIG_NET_CONTEXT_REUSEPORT=y
 diff --git a/tests/net/socket/tls/src/main.c b/tests/net/socket/tls/src/main.c
-index 5db92a18ff3..c1531aa1d1a 100644
+index 5db92a18ff3..1ec7fb73747 100644
 --- a/tests/net/socket/tls/src/main.c
 +++ b/tests/net/socket/tls/src/main.c
 @@ -11,23 +11,80 @@ LOG_MODULE_REGISTER(net_test, CONFIG_NET_SOCKETS_LOG_LEVEL);
@@ -455,7 +448,7 @@ index 5db92a18ff3..c1531aa1d1a 100644
  #include <zephyr/net/tls_credentials.h>
 +/* IANA TLS ciphersuite IDs used by this file's set_ciphersuites tests.
 + * Names match RFC 5487. Don't introduce a public Zephyr-wide header just
-+ * for these two — both backends accept IANA IDs verbatim via the byte-
++ * for these two - both backends accept IANA IDs verbatim via the byte-
 + * list cipher API. (The RFC 4279 SHA-1 CBC suites used previously are no
 + * longer selectable in the Zephyr 4.4 mbedTLS ciphersuite Kconfig.)
 + */
@@ -486,7 +479,7 @@ index 5db92a18ff3..c1531aa1d1a 100644
  uint32_t ztls_get_session_count(void);
  
 +/* Server-side allow-list. Only TLS_PSK_WITH_AES_256_CBC_SHA384 is enabled
-+ * in prj.conf for the mbedTLS scenarios — the GCM suite entry is never
++ * in prj.conf for the mbedTLS scenarios - the GCM suite entry is never
 + * negotiated, it only exercises list handling and the mismatch case. Keep
 + * it that way: enabling extra suites globally in prj.conf would change the
 + * default cipher negotiated by the other tests in this file, which size
@@ -523,7 +516,7 @@ index 5db92a18ff3..c1531aa1d1a 100644
  #define CLIENT_3_PORT 4245
 +/* Dedicated port for test_session_cache_client_resume: the client-side
 + * session cache is keyed by peer address, so the test needs a fixed
-+ * port — but it must not collide with SERVER_PORT used by the DTLS
++ * port - but it must not collide with SERVER_PORT used by the DTLS
 + * multi-client tests, to stay independent of suite ordering and
 + * TIME_WAIT teardown.
 + */
@@ -741,7 +734,7 @@ index 5db92a18ff3..c1531aa1d1a 100644
 + * GCM), measured by running the suite with an oversized buffer and printing
 + * the inbound record length. Different values per backend reflect different
 + * implementation choices for the record-layer framing (header layout, IV
-+ * placement, padding) — they are not part of any wire-format ABI. If a
++ * placement, padding) - they are not part of any wire-format ABI. If a
 + * test starts failing here after a backend or ciphersuite change, re-measure
 + * with an oversized buffer and update.
 + */
@@ -844,11 +837,11 @@ index 5db92a18ff3..c1531aa1d1a 100644
 +	test_prepare_dtls_connection(NET_AF_INET6);
 +
 +	/* Schedule reception shutdown from workqueue while recv() is blocked
-+	 * — exercises the recv_eof check inside the wolfSSL DTLS recv loop
++	 * - exercises the recv_eof check inside the wolfSSL DTLS recv loop
 +	 * (recvfrom_dtls_common_wolfssl). The TCP/TLS variant lives in
 +	 * test_shutdown_rd_while_recv. 50ms margin guards against slow CI
 +	 * runners where recv() hasn't reached its blocking point yet at the
-+	 * 10ms mark — short enough to keep the test fast.
++	 * 10ms mark - short enough to keep the test fast.
 +	 */
 +	k_work_init_delayable(&test_data.work, shutdown_work);
 +	test_data.sock = c_sock;
@@ -1231,7 +1224,7 @@ index 5db92a18ff3..c1531aa1d1a 100644
 +
 +/* Sets up a TLS client/server connection on a FIXED server port so two
 + * consecutive connections present the same peer address (which is the key
-+ * into client_cache). Used by test_session_cache_client_resume — the
++ * into client_cache). Used by test_session_cache_client_resume - the
 + * main test_prepare_* helpers use ANY_PORT, which prevents resumption
 + * lookup from matching across connections.
 + */
@@ -1301,7 +1294,7 @@ index 5db92a18ff3..c1531aa1d1a 100644
 +		zsock_close(dummy);
 +	}
 +
-+	/* First connection — should perform full handshake, then store. */
++	/* First connection - should perform full handshake, then store. */
 +	prepare_tls_session_resume_connection(RESUME_SERVER_PORT);
 +
 +#if defined(CONFIG_WOLFSSL)
@@ -1326,7 +1319,7 @@ index 5db92a18ff3..c1531aa1d1a 100644
 +	test_sockets_close();
 +	k_sleep(TCP_TEARDOWN_TIMEOUT);
 +
-+	/* Second connection to the SAME server port — should restore the
++	/* Second connection to the SAME server port - should restore the
 +	 * stored session and resume.
 +	 */
 +	prepare_tls_session_resume_connection(RESUME_SERVER_PORT);
@@ -1863,7 +1856,7 @@ index 00000000000..ca2568bb15d
 +CONFIG_WOLFSSL_SESSION_EXPORT=y
 +CONFIG_WOLFSSL_ALWAYS_VERIFY_CB=y
 diff --git a/tests/net/socket/tls_ext/src/main.c b/tests/net/socket/tls_ext/src/main.c
-index 865a44993d7..cc79217a081 100644
+index 865a44993d7..727138eefbe 100644
 --- a/tests/net/socket/tls_ext/src/main.c
 +++ b/tests/net/socket/tls_ext/src/main.c
 @@ -13,8 +13,14 @@
@@ -1922,21 +1915,28 @@ index 865a44993d7..cc79217a081 100644
  
  	memset(&sa, 0, sizeof(sa));
  	/* The server listens on all network interfaces */
-@@ -334,11 +340,11 @@ static int test_configure_client(struct net_sockaddr_in *sa, bool own_cert,
+@@ -334,11 +340,16 @@ static int test_configure_client(struct net_sockaddr_in *sa, bool own_cert,
  
  	r = zsock_setsockopt(client_fd, ZSOCK_SOL_TLS, ZSOCK_TLS_SEC_TAG_LIST,
  			     sec_tag_list, sec_tag_list_size);
 -	zassert_not_equal(r, -1, "failed to set TLS_SEC_TAG_LIST (%d)", errno);
 +	zassert_not_equal(r, -1, "failed to set ZSOCK_TLS_SEC_TAG_LIST (%d)", errno);
  
- 	r = zsock_setsockopt(client_fd, ZSOCK_SOL_TLS, ZSOCK_TLS_HOSTNAME, hostname,
- 			     strlen(hostname) + 1);
+-	r = zsock_setsockopt(client_fd, ZSOCK_SOL_TLS, ZSOCK_TLS_HOSTNAME, hostname,
+-			     strlen(hostname) + 1);
 -	zassert_not_equal(r, -1, "failed to set TLS_HOSTNAME (%d)", errno);
-+	zassert_not_equal(r, -1, "failed to set ZSOCK_TLS_HOSTNAME (%d)", errno);
++	/* A NULL hostname leaves TLS_HOSTNAME unset, which both backends treat
++	 * as a peer identity that cannot be verified.
++	 */
++	if (hostname != NULL) {
++		r = zsock_setsockopt(client_fd, ZSOCK_SOL_TLS, ZSOCK_TLS_HOSTNAME, hostname,
++				     strlen(hostname) + 1);
++		zassert_not_equal(r, -1, "failed to set ZSOCK_TLS_HOSTNAME (%d)", errno);
++	}
  
  	sa->sin_family = NET_PF_INET;
  	sa->sin_port = net_htons(PORT);
-@@ -434,9 +440,17 @@ ZTEST(net_socket_tls_api_extension, test_tls_peer_verify_optional)
+@@ -434,9 +445,17 @@ ZTEST(net_socket_tls_api_extension, test_tls_peer_verify_optional)
  
  ZTEST(net_socket_tls_api_extension, test_tls_peer_verify_required)
  {
@@ -1954,7 +1954,7 @@ index 865a44993d7..cc79217a081 100644
  static void test_tls_cert_verify_result_opt_common(uint32_t expect)
  {
  	int server_fd, client_fd, ret;
-@@ -457,7 +471,7 @@ static void test_tls_cert_verify_result_opt_common(uint32_t expect)
+@@ -457,7 +476,7 @@ static void test_tls_cert_verify_result_opt_common(uint32_t expect)
  
  	ret = zsock_setsockopt(client_fd, ZSOCK_SOL_TLS, ZSOCK_TLS_PEER_VERIFY,
  			       &peer_verify, sizeof(peer_verify));
@@ -1963,15 +1963,66 @@ index 865a44993d7..cc79217a081 100644
  
  	ret = zsock_connect(client_fd, (struct net_sockaddr *)&sa, sizeof(sa));
  	zassert_not_equal(ret, -1, "failed to connect (%d)", errno);
-@@ -481,13 +495,60 @@ ZTEST(net_socket_tls_api_extension, test_tls_cert_verify_result_opt_bad_cn)
+@@ -481,6 +500,104 @@ ZTEST(net_socket_tls_api_extension, test_tls_cert_verify_result_opt_bad_cn)
  	test_tls_cert_verify_result_opt_common(MBEDTLS_X509_BADCERT_CN_MISMATCH);
  }
  
++/* A client that never sets TLS_HOSTNAME has no name to check the peer
++ * certificate against, so TLS_PEER_VERIFY_REQUIRED must reject it rather
++ * than accept a certificate issued for any name.
++ */
++ZTEST(net_socket_tls_api_extension, test_tls_no_hostname_required_rejected)
++{
++	int server_fd, client_fd, ret;
++	k_tid_t server_thread_id;
++	struct net_sockaddr_in sa;
++	int peer_verify = ZSOCK_TLS_PEER_VERIFY_REQUIRED;
++
++	server_fd = test_configure_server(&server_thread_id, ZSOCK_TLS_PEER_VERIFY_NONE,
++					  false, true);
++	client_fd = test_configure_client(&sa, false, NULL);
++
++	ret = zsock_setsockopt(client_fd, ZSOCK_SOL_TLS, ZSOCK_TLS_PEER_VERIFY,
++			       &peer_verify, sizeof(peer_verify));
++	zassert_ok(ret, "failed to set ZSOCK_TLS_PEER_VERIFY (%d)", errno);
++
++	ret = zsock_connect(client_fd, (struct net_sockaddr *)&sa, sizeof(sa));
++	zassert_equal(ret, -1, "connect succeeded without a hostname to verify");
++
++	test_shutdown(client_fd, server_fd, server_thread_id);
++}
++
++/* TLS_PEER_VERIFY_NONE means no peer verification at all, so a hostname
++ * that cannot match must not fail the handshake. Guards against the name
++ * check making NONE stricter than OPTIONAL.
++ */
++ZTEST(net_socket_tls_api_extension, test_tls_verify_none_ignores_hostname)
++{
++	int server_fd, client_fd, ret;
++	k_tid_t server_thread_id;
++	struct net_sockaddr_in sa;
++	int peer_verify = ZSOCK_TLS_PEER_VERIFY_NONE;
++
++	server_fd = test_configure_server(&server_thread_id, ZSOCK_TLS_PEER_VERIFY_NONE,
++					  false, false);
++	client_fd = test_configure_client(&sa, false, "dummy");
++
++	ret = zsock_setsockopt(client_fd, ZSOCK_SOL_TLS, ZSOCK_TLS_PEER_VERIFY,
++			       &peer_verify, sizeof(peer_verify));
++	zassert_ok(ret, "failed to set ZSOCK_TLS_PEER_VERIFY (%d)", errno);
++
++	ret = zsock_connect(client_fd, (struct net_sockaddr *)&sa, sizeof(sa));
++	zassert_not_equal(ret, -1, "TLS_PEER_VERIFY_NONE rejected a hostname mismatch (%d)",
++			  errno);
++
++	test_shutdown(client_fd, server_fd, server_thread_id);
++}
++
 +/* Applications commonly pass strlen(host) + 1 (or sizeof a literal) as
 + * optlen for TLS_HOSTNAME. The mbedTLS backend ignores optlen and reads a
 + * C string; the wolfSSL backend uses optlen as the hostname length and
 + * strips a trailing NUL. Both must accept the NUL-terminated form and
-+ * still match the certificate CN — pin that here.
++ * still match the certificate CN - pin that here.
 + */
 +ZTEST(net_socket_tls_api_extension, test_tls_hostname_trailing_nul)
 +{
@@ -2017,15 +2068,7 @@ index 865a44993d7..cc79217a081 100644
  struct test_cert_verify_ctx {
  	bool cb_called;
  	int result;
- };
- 
- static int cert_verify_cb(void *ctx, mbedtls_x509_crt *crt, int depth,
--			  uint32_t *flags)
-+			   uint32_t *flags)
- {
- 	struct test_cert_verify_ctx *test_ctx = (struct test_cert_verify_ctx *)ctx;
- 
-@@ -522,7 +583,7 @@ static void test_tls_cert_verify_cb_opt_common(int result)
+@@ -522,7 +639,7 @@ static void test_tls_cert_verify_cb_opt_common(int result)
  
  	ret = zsock_setsockopt(client_fd, ZSOCK_SOL_TLS, ZSOCK_TLS_CERT_VERIFY_CALLBACK,
  			       &cb, sizeof(cb));
@@ -2034,7 +2077,7 @@ index 865a44993d7..cc79217a081 100644
  
  	ret = zsock_connect(client_fd, (struct net_sockaddr *)&sa, sizeof(sa));
  	zassert_true(ctx.cb_called, "callback not called");
-@@ -546,6 +607,37 @@ ZTEST(net_socket_tls_api_extension, test_tls_cert_verify_cb_opt_bad_cert)
+@@ -546,6 +663,37 @@ ZTEST(net_socket_tls_api_extension, test_tls_cert_verify_cb_opt_bad_cert)
  	test_tls_cert_verify_cb_opt_common(MBEDTLS_ERR_X509_CERT_VERIFY_FAILED);
  }
  
@@ -2072,7 +2115,7 @@ index 865a44993d7..cc79217a081 100644
  static void *setup(void)
  {
  	int r;
-@@ -599,4 +691,361 @@ static void *setup(void)
+@@ -599,4 +747,361 @@ static void *setup(void)
  	return NULL;
  }
  
