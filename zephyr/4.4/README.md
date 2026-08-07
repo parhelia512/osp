@@ -6,36 +6,61 @@ for all TLS operations. This will also enable wolfSSL as an alternative RNG impl
 this feature, first ensure wolfSSL has been added to the west manifest using the instructions from the
 README.md here: https://github.com/wolfSSL/wolfssl/tree/master/zephyr
 
-This integration depends on Kconfig options and a few small fixes in the wolfSSL Zephyr module:
-Zephyr default TLS support (`WOLFSSL_SESSION_EXPORT`, `WOLFSSL_KEEP_PEER_CERT`,
-`WOLFSSL_ALWAYS_VERIFY_CB`, and the `native_sim` timer gate extension) plus three Zephyr 4.4 fixes
-(a `wolfio.h` include guard for the retyped 4.4 zsock prototypes, an `arpa/inet.h` include in
-`test.h`, and a malloc-arena bump in the `wolfssl_tls_sock` sample). These are all in wolfSSL
-upstream (master), so a recent wolfSSL revision needs no extra module patching.
+This integration requires **wolfSSL > 5.9.2** (master, or any newer release). 5.9.2 itself is the
+baseline for the socket backend: earlier revisions gate `wolfSSL_clear()` - used by the
+per-session reset path in `sockets_tls.c` - behind `OPENSSL_EXTRA`/`WOLFSSL_WPAS_SMALL`, and lack
+the upstream `OPENSSL_EXTRA_X509_SMALL` gate arm that lets the backend validate credentials
+without forcing `KEEP_PEER_CERT`. Zephyr 4.4 support then needs a few changes that landed just
+after that tag, detailed below.
 
-Then patch the Zephyr tree (run inside the `zephyr` directory). The integration ships as two
-patches, both generated against the Zephyr **4.4.1** release:
+The Kconfig options the backend builds on - `WOLFSSL_SESSION_EXPORT`,
+`WOLFSSL_OPENSSL_EXTRA_X509_SMALL` and `WOLFSSL_ALWAYS_VERIFY_CB` in the wolfSSL Zephyr module -
+are part of that 5.9.2 baseline.
 
-- **`zephyr-tls-4.4.1.patch`** — the core wolfSSL backend (the BSD-sockets TLS layer and the
+Those post-5.9.2 changes are: a `wolfio.h` include guard for the retyped 4.4 zsock prototypes, an
+`arpa/inet.h` include in `test.h`, a malloc-arena bump in the `wolfssl_tls_sock` sample, and a
+`native_sim` simulation fix - `wc_port.c`'s `z_time()` used to
+consult the simulator RTC only when `CONFIG_RTC` *and* picolibc/newlib were selected, so under the
+host libc ASN.1 date validation fell back to uptime-since-boot; it now reads the simulator RTC on
+native boards regardless of the selected libc (native simulation only, real targets unchanged).
+
+Those are merged in pull request
+[wolfSSL/wolfssl#10983](https://github.com/wolfSSL/wolfssl/pull/10983), which landed after the
+`v5.9.2-stable` tag. Any wolfSSL newer than 5.9.2 therefore works: a released version once the
+next one ships, or a master revision containing that pull request in the meantime.
+
+Then patch the Zephyr tree (run inside the `zephyr` directory). The integration ships as three
+patches, all generated against the Zephyr **4.4.1** release:
+
+- **`zephyr-tls-4.4.1.patch`** - the core wolfSSL backend (the BSD-sockets TLS layer and the
   RNG/CSPRNG). This is all that is required to use wolfSSL for TLS sockets.
-- **`zephyr-tls-4.4.1-tests.patch`** — the wolfSSL twister test scenarios and the echo_server
+- **`zephyr-tls-4.4.1-tests.patch`** - the wolfSSL twister test scenarios and the echo_server
   sample overlay. Apply it only if you want to run the test suite yourself; it is not needed to
   use the integration. It depends on the core patch, so apply the core patch first.
+- **`zephyr-tls-4.4.1-mbedtls-decoupling.patch`** - optional. Removes the remaining hard mbedTLS
+  dependencies from subsystems whose crypto already runs through the PSA API or the TLS socket
+  layer (mcumgr/UpdateHub DTLS, LwM2M, WireGuard, and uuid v5), so an image using wolfSSL plus the
+  wolfPSA PSA provider can drop `CONFIG_MBEDTLS` entirely. Apply on top of the core patch. The
+  provider side is not part of this patch set: it ships in wolfPSA itself, which is a Zephyr
+  module of its own (`zephyr/` subdirectory, `CONFIG_WOLFPSA=y`) - see
+  https://github.com/wolfSSL/wolfPSA/tree/master/zephyr.
 
 ```
 # required:
 patch -p1 < /path/to/your/osp/zephyr/4.4/zephyr-tls-4.4.1.patch
 # optional, only to run the tests:
 patch -p1 < /path/to/your/osp/zephyr/4.4/zephyr-tls-4.4.1-tests.patch
+# optional, to drop mbedTLS entirely (needs wolfSSL + the wolfPSA PSA provider):
+patch -p1 < /path/to/your/osp/zephyr/4.4/zephyr-tls-4.4.1-mbedtls-decoupling.patch
 ```
 
-The tests patch also includes one small, wolfSSL-independent test fix —
+The tests patch also includes one small, wolfSSL-independent test fix -
 `sizeof(sec_tag_list_verify_none)` in `tests/net/lib/http_server/tls/src/main.c`, which the
 `net.http.server.tls` scenario needs on 64-bit builds. That fix is being submitted upstream
 separately and is expected to land in Zephyr 4.4.2; if you apply the tests patch to a tree that
 already contains it, drop the corresponding one-line hunk.
 
-The 4.4 mbedTLS module also requires the `tf-psa-crypto` west project — make sure it is in
+The 4.4 mbedTLS module also requires the `tf-psa-crypto` west project - make sure it is in
 your manifest's allowlist before `west update`.
 
 ### Minimum prj.conf
@@ -43,7 +68,7 @@ your manifest's allowlist before `west update`.
 Use `tests/net/socket/tls/prj_wolfssl.conf` as a template. At minimum the application needs
 `CONFIG_MBEDTLS=n`, `CONFIG_WOLFSSL=y`, and Zephyr POSIX support (`CONFIG_POSIX_API=y`,
 `CONFIG_POSIX_TIMERS=y`, `CONFIG_POSIX_THREADS=y`; without `CONFIG_POSIX_API` also set
-`CONFIG_POSIX_SYSTEM_INTERFACES=y` — Zephyr 4.4 gates the POSIX option groups on it).
+`CONFIG_POSIX_SYSTEM_INTERFACES=y` - Zephyr 4.4 gates the POSIX option groups on it).
 Size `CONFIG_COMMON_LIBC_MALLOC_ARENA_SIZE` to the application footprint.
 
 ### What changed compared to the Zephyr 4.3 integration
@@ -68,9 +93,9 @@ Zephyr 4.4 restructured the TLS socket layer and the random subsystem; the integ
   upstream `CONFIG_NET_SOCKETS_TLS_CONNECT_TIMEOUT` (default 10 s) on both backends.
 - **RNG.** Zephyr 4.4 removed `random_ctr_drbg.c` (the CSPRNG is PSA-based now). The wolfSSL
   RNG integration is therefore a new CSPRNG choice option `CONFIG_WOLFSSL_CSPRNG_GENERATOR`
-  (file `subsys/random/random_wolfssl.c`, wolfSSL Hash-DRBG seeded from the entropy driver,
-  personalization string via `CONFIG_WOLFSSL_CSPRNG_PERSONALIZATION`). Select it inside
-  `choice CSPRNG_GENERATOR_CHOICE` instead of the deprecated `CTR_DRBG_CSPRNG_GENERATOR`.
+  (file `subsys/random/random_wolfssl.c`, wolfSSL Hash-DRBG seeded from the entropy driver).
+  Select it inside `choice CSPRNG_GENERATOR_CHOICE` instead of the deprecated
+  `CTR_DRBG_CSPRNG_GENERATOR`.
 - **Minimum TLS version.** Upstream 4.4 enforces a minimum TLS version derived from the socket
   protocol. The wolfSSL backend keeps the 4.3 exact-version method selection
   (`wolfTLSv1_2/1_3_*_method`), which is stricter: an `IPPROTO_TLS_1_2` socket negotiates
@@ -80,7 +105,7 @@ Zephyr 4.4 restructured the TLS socket layer and the random subsystem; the integ
   `CONFIG_NET_SOCKETS_TLS_WOLFSSL_VERIFY_CALLBACK` (the old name risked colliding with the
   wolfSSL module's own Kconfig namespace). A 4.3-era `prj.conf` still setting the old name
   fails the build with `error: Aborting due to Kconfig warnings` /
-  `attempt to assign the value 'y' to the undefined symbol WOLFSSL_VERIFY_CALLBACK` —
+  `attempt to assign the value 'y' to the undefined symbol WOLFSSL_VERIFY_CALLBACK` -
   rename the option in your application config.
 
 ### Configuration options
@@ -93,21 +118,37 @@ Options added by this integration:
 
 | Kconfig | Purpose |
 |---|---|
-| `WOLFSSL_SESSION_EXPORT` | External session cache (serialize sessions across connections) |
-| `WOLFSSL_KEEP_PEER_CERT` | Retain peer certificate after handshake |
-| `WOLFSSL_ALWAYS_VERIFY_CB` | Invoke verify callback on success in addition to failure |
 | `NET_SOCKETS_TLS_WOLFSSL_VERIFY_CALLBACK` | Enable wolfSSL-native per-cert verify callback via the `TLS_CERT_VERIFY_CALLBACK_WOLFSSL` socket option (named `WOLFSSL_VERIFY_CALLBACK` in the 4.3 integration) |
 | `WOLFSSL_CSPRNG_GENERATOR` | Use the wolfSSL DRBG as the system CSPRNG (`sys_csrand_get`) |
-| `WOLFSSL_CSPRNG_PERSONALIZATION` | Personalization string for the wolfSSL DRBG |
 
-Existing wolfSSL module options (`WOLFSSL_DTLS`, `WOLFSSL_ALPN`, `WOLFSSL_PSK`,
-`WOLFSSL_TLS_VERSION_1_3`, `WOLFSSL_MAX_FRAGMENT_LEN`) are opt-in as usual.
+`CONFIG_NET_SOCKETS_SOCKOPT_TLS` force-selects the wolfSSL module options the backend cannot
+work without, so an application config does not have to set them:
+
+| Kconfig | Purpose |
+|---|---|
+| `WOLFSSL_OPENSSL_EXTRA_X509_SMALL` | Exposes `WOLFSSL_X509_STORE_CTX::current_cert`, which the verify callback reads for the leaf CN/SAN match |
+| `WOLFSSL_ALWAYS_VERIFY_CB` | Invoke verify callback on success in addition to failure - without it the CN/SAN match is silently bypassed |
+| `WOLFSSL_SESSION_CACHE` | wolfSSL compiles the session API out under `NO_SESSION_CACHE`, which the TLS layer needs to link |
+
+`CONFIG_WOLFSSL_SNI` is optional: with it disabled the Server Name Indication extension is not
+sent, but a configured `TLS_HOSTNAME` still drives the certificate CN/SAN match that
+`TLS_PEER_VERIFY` relies on. `CONFIG_WOLFSSL_CRYPTO_ONLY` is incompatible with TLS sockets and
+is rejected with a build error.
+
+Session resumption is a deliberate opt-in: set `CONFIG_WOLFSSL_SESSION_EXPORT=y` (external session
+cache) if you want it - the integration's session store/restore are no-ops without it. Existing
+wolfSSL module options (`WOLFSSL_DTLS`, `WOLFSSL_ALPN`, `WOLFSSL_PSK`, `WOLFSSL_TLS_VERSION_1_3`,
+`WOLFSSL_MAX_FRAGMENT_LEN`) are opt-in as usual.
 
 ### Limitations
 
+- A client that never sets `TLS_HOSTNAME` is rejected under `TLS_PEER_VERIFY_REQUIRED`, because
+  there is no name to check the peer certificate against. This matches the mbedTLS backend, which
+  sets an empty hostname for that case so no certificate can match. Set `TLS_HOSTNAME`, or use
+  `TLS_PEER_VERIFY_OPTIONAL` and read `TLS_CERT_VERIFY_RESULT`, or `TLS_PEER_VERIFY_NONE`.
 - TLS 1.0 and 1.1 disabled (`NO_OLD_TLS`).
 - The mbedTLS-style `TLS_CERT_VERIFY_CALLBACK` socket option is not supported on the wolfSSL backend.
-- `TLS_CERT_NOCOPY` has no effect — certificates are always copied.
+- `TLS_CERT_NOCOPY` has no effect - certificates are always copied.
 - TLS 1.3 0-RTT not wired on the wolfSSL path.
 - DTLS Connection ID (`TLS_DTLS_CID*`) is not supported; DTLS server sessions are matched by
   peer address only.
