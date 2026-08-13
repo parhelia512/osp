@@ -1,8 +1,44 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Juliusz Sosinowicz <juliusz@wolfssl.com>
+Date: Fri, 31 Jul 2026 11:52:22 +0000
 Subject: [PATCH] 10.4p1 patch for wolfSSL
 
+This patch was implemented and tested on OpenSSH version 10.4p1.
+
+Compile wolfSSL with:
+    ./configure --enable-openssh
+    make
+    make install
+
+Compile OpenSSH with
+    patch -p1 < <path/to/this/patch>
+    autoreconf
+    ./configure --with-wolfssl
+    make
+
+Running the OpenSSH tests requires wolfSSL to be configured using
+    ./configure --enable-openssh --enable-dsa --with-max-rsa-bits=8192
+and it is recommended to configure OpenSSH with
+    ./configure --with-wolfssl --with-rpath='-Wl,-rpath='
+to resolve issues with missing library paths. With the above modifications
+OpenSSH should pass all tests run with:
+```
+make tests
+```
 ---
+ Makefile.in                                 |   1 +
+ cipher-aesctr.h                             |   2 -
+ cipher.c                                    |   3 +-
+ config.h.in                                 |  47 ++-
+ configure                                   | 401 +++++++++++++++++++++++++-
+ configure.ac                                | 204 +++++++++++-
+ includes.h                                  |   5 +
+ log.c                                       |  46 +++
+ openbsd-compat/openssl-compat.c             |   4 +
+ regress/unittests/test_helper/test_helper.c |   4 +
+ sshkey.c                                    |   8 +
+ 11 files changed, 717 insertions(+), 8 deletions(-)
+
 diff --git a/Makefile.in b/Makefile.in
 index da59bcc1..dcf36432 100644
 --- a/Makefile.in
@@ -711,11 +747,11 @@ index a4d544cc..6278c752 100644
 +	[  --with-wolfssl=PATH      PATH to wolfssl install (default /usr/local) ],
 +	[
 +	wolfssl_install_dir=/usr/local
-+	
++
 +	if test "x${withval}" != "xyes" ; then
 +		wolfssl_install_dir=${withval}
 +	fi
-+	
++
 +	if test -d "${wolfssl_install_dir}/lib"; then
 +		if test -n "${rpath_opt}"; then
 +			LDFLAGS="-L${wolfssl_install_dir}/lib ${rpath_opt}${wolfssl_install_dir}/lib ${LDFLAGS}"
@@ -741,7 +777,7 @@ index a4d544cc..6278c752 100644
 +	AC_TRY_LINK_FUNC([wolfSSL_Init], ,
 +		[
 +			AC_MSG_ERROR([wolfSSL isn't found.  You can get it from $WOLFSSL_URL
-+	
++
 +		If it's already installed, specify its path using --with-wolfssl=/dir/])
 +		]
 +	)
