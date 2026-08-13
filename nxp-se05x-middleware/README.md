@@ -56,6 +56,17 @@ $ make
 $ sudo make install
 ```
 
+When `PTMW_SE05X_Auth=PlatfSCP03`, the patched wolfSSL HostCrypto backend is
+compiled in an SCP03-only mode. It keeps only the AES-CBC, CMAC, and RNG calls
+used by platform SCP03, so unused RSA, ECC, HMAC, digest, DES3, HKDF, and AEAD
+code is not pulled from a statically linked wolfSSL library. Combined
+authentication modes (for example `ECKey_PlatfSCP03`) retain the full backend
+because their non-platform authentication method needs additional algorithms.
+
+`--enable-cmac` is still required. `--enable-keygen` is not required by the
+SCP03-only middleware path itself, but remains necessary if the application
+uses wolfSSL key generation after the authenticated channel is established.
+
 Then, build SE05x Middleware:
 
 ```

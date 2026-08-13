@@ -5182,7 +5182,7 @@ new file mode 100644
 index 0000000..5a9aa2d
 --- /dev/null
 +++ b/sss/src/wolfssl/fsl_sss_wolfssl_apis.c
-@@ -0,0 +1,3304 @@
+@@ -0,0 +1,3424 @@
 +/*
 + *
 + * Copyright 2018-2025 NXP
@@ -5218,6 +5218,38 @@ index 0000000..5a9aa2d
 +#include <string.h>
 +
 +#include "nxLog_sss.h"
++
++#define SSS_WOLFSSL_SCP03_ONLY SSS_HAVE_SE05X_AUTH_PLATFSCP03
++
++/* A pure Platform SCP03 build only needs AES-CBC, CMAC and the RNG used to
++ * create the host challenge. Keep the complete SSS API surface available,
++ * but do not make the unused implementations reference other wolfCrypt
++ * algorithms. This is intentionally done after the wolfSSL headers have been
++ * included so the library configuration and public type layouts stay intact. */
++#if SSS_WOLFSSL_SCP03_ONLY
++    #undef SSSFTR_SW_ECC
++    #define SSSFTR_SW_ECC 0
++    #undef SSSFTR_SW_RSA
++    #define SSSFTR_SW_RSA 0
++    #ifndef NO_RSA
++        #define NO_RSA
++    #endif
++    #ifndef NO_HMAC
++        #define NO_HMAC
++    #endif
++    #ifndef NO_DES3
++        #define NO_DES3
++    #endif
++    #undef HAVE_ECC
++    #undef HAVE_CURVE25519
++    #undef HAVE_CURVE448
++    #undef HAVE_ED25519
++    #undef HAVE_HKDF
++    #undef HAVE_AESGCM
++    #undef WOLFSSL_AESGCM
++    #undef HAVE_AESCCM
++    #undef WOLFSSL_CCM
++#endif
 +
 +#define MAX_KEY_OBJ_COUNT KS_N_ENTIRES
 +#define MAX_FILE_NAME_SIZE 255
@@ -6633,6 +6665,7 @@ index 0000000..5a9aa2d
 +    uint8_t *destData, size_t *destLen)
 +{
 +    sss_status_t retval = kStatus_SSS_Fail;
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    sss_wolfssl_object_t *keyObj = context->keyObject;
 +    int ret      = 0;
 +    int padding  = 0;
@@ -6665,6 +6698,13 @@ index 0000000..5a9aa2d
 +    }
 +
 +    wc_FreeRng(&rng);
++#else
++    (void)context;
++    (void)srcData;
++    (void)srcLen;
++    (void)destData;
++    (void)destLen;
++#endif
 +
 +    return retval;
 +}
@@ -6674,6 +6714,7 @@ index 0000000..5a9aa2d
 +    uint8_t *destData, size_t *destLen)
 +{
 +    sss_status_t retval = kStatus_SSS_Fail;
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    sss_wolfssl_object_t *keyObj = context->keyObject;
 +    int ret     = 0;
 +    int padding = 0;
@@ -6698,6 +6739,13 @@ index 0000000..5a9aa2d
 +        *destLen = ret;
 +        retval = kStatus_SSS_Success;
 +    }
++#else
++    (void)context;
++    (void)srcData;
++    (void)srcLen;
++    (void)destData;
++    (void)destLen;
++#endif
 +
 +    return retval;
 +}
@@ -6707,6 +6755,7 @@ index 0000000..5a9aa2d
 +    uint8_t *signature, size_t *signatureLen)
 +{
 +    sss_status_t retval = kStatus_SSS_Fail;
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    int ret      = 0;
 +    int padding  = 0;
 +    int mgf      = 0;
@@ -6800,6 +6849,13 @@ index 0000000..5a9aa2d
 +    }
 +
 +    wc_FreeRng(&rng);
++#else
++    (void)context;
++    (void)digest;
++    (void)digestLen;
++    (void)signature;
++    (void)signatureLen;
++#endif
 +
 +    return retval;
 +}
@@ -6809,6 +6865,7 @@ index 0000000..5a9aa2d
 +    uint8_t *signature, size_t signatureLen)
 +{
 +    sss_status_t retval = kStatus_SSS_Fail;
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    int ret      = 0;
 +    int padding  = 0;
 +    int mgf      = 0;
@@ -6909,6 +6966,13 @@ index 0000000..5a9aa2d
 +            LOG_E("Unsupported cipherType for digest sign");
 +            break;
 +    }
++#else
++    (void)context;
++    (void)digest;
++    (void)digestLen;
++    (void)signature;
++    (void)signatureLen;
++#endif
 +
 +    return retval;
 +
@@ -7996,6 +8060,7 @@ index 0000000..5a9aa2d
 +/* Functions : sss_wolfssl_md                                                 */
 +/* ************************************************************************** */
 +
++#if !SSS_WOLFSSL_SCP03_ONLY
 +sss_status_t sss_wolfssl_digest_context_init(
 +    sss_wolfssl_digest_t *context, sss_wolfssl_session_t *session,
 +    sss_algorithm_t algorithm, sss_mode_t mode)
@@ -8168,6 +8233,61 @@ index 0000000..5a9aa2d
 +    }
 +    memset(context, 0, sizeof(*context));
 +}
++#else
++sss_status_t sss_wolfssl_digest_context_init(
++    sss_wolfssl_digest_t *context, sss_wolfssl_session_t *session,
++    sss_algorithm_t algorithm, sss_mode_t mode)
++{
++    (void)context;
++    (void)session;
++    (void)algorithm;
++    (void)mode;
++    return kStatus_SSS_Fail;
++}
++
++sss_status_t sss_wolfssl_digest_one_go(
++    sss_wolfssl_digest_t *context, const uint8_t *message, size_t messageLen,
++    uint8_t *digest, size_t *digestLen)
++{
++    (void)context;
++    (void)message;
++    (void)messageLen;
++    (void)digest;
++    (void)digestLen;
++    return kStatus_SSS_Fail;
++}
++
++sss_status_t sss_wolfssl_digest_init(sss_wolfssl_digest_t *context)
++{
++    (void)context;
++    return kStatus_SSS_Fail;
++}
++
++sss_status_t sss_wolfssl_digest_update(sss_wolfssl_digest_t *context,
++    const uint8_t *message, size_t messageLen)
++{
++    (void)context;
++    (void)message;
++    (void)messageLen;
++    return kStatus_SSS_Fail;
++}
++
++sss_status_t sss_wolfssl_digest_finish(sss_wolfssl_digest_t *context,
++    uint8_t *digest, size_t *digestLen)
++{
++    (void)context;
++    (void)digest;
++    (void)digestLen;
++    return kStatus_SSS_Fail;
++}
++
++void sss_wolfssl_digest_context_free(sss_wolfssl_digest_t *context)
++{
++    if (context != NULL) {
++        memset(context, 0, sizeof(*context));
++    }
++}
++#endif /* !SSS_WOLFSSL_SCP03_ONLY */
 +
 +/* End: wolfssl_md */
 +
