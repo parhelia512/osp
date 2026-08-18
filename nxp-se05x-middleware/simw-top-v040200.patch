@@ -3023,7 +3023,7 @@ diff -Naur simw-top/sss/src/keystore/keystore_pc.c /home/pi/se_mw/simw-top/sss/s
 diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c
 --- simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c	1969-12-31 17:00:00.000000000 -0700
 +++ /home/pi/se_mw/simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c	2022-11-11 10:27:06.335662156 -0700
-@@ -0,0 +1,3418 @@
+@@ -0,0 +1,3423 @@
 +/*
 + *
 + * Copyright 2018-2020 NXP
@@ -3059,6 +3059,11 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +#include <string.h>
 +
 +#include "nxLog_sss.h"
++
++/* Record the Aes layout before SCP03-only pruning removes HAVE_AESGCM. */
++#if defined(WOLFSSL_SE050) && defined(HAVE_AESGCM)
++    #define SSS_WOLFSSL_AES_HAS_USESWCRYPT
++#endif
 +
 +#define SSS_WOLFSSL_SCP03_ONLY SSS_HAVE_SE05X_AUTH_PLATFSCP03
 +
@@ -4868,7 +4873,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +        case kAlgorithm_SSS_AES_CBC:
 +        case kAlgorithm_SSS_AES_CTR:
 +            ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
-+        #ifdef WOLFSSL_SE050
++        #ifdef SSS_WOLFSSL_AES_HAS_USESWCRYPT
 +            if (ret == 0) {
 +                /* HostCrypto should use software crypto, not SE05x */
 +                aes.useSWCrypt = 1;
@@ -5148,7 +5153,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    if (context->algorithm == kAlgorithm_SSS_AES_GCM) {
 +#if !defined(NO_AES) && defined(HAVE_AESGCM)
 +        ret = wc_AesInit(context->aes, NULL, INVALID_DEVID);
-+    #ifdef WOLFSSL_SE050
++    #ifdef SSS_WOLFSSL_AES_HAS_USESWCRYPT
 +        if (ret == 0) {
 +            /* HostCrypto should use software crypto, not SE05x */
 +            context->aes->useSWCrypt = 1;
@@ -5182,7 +5187,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    else if (context->algorithm == kAlgorithm_SSS_AES_CCM) {
 +#if !defined(NO_AES) && defined(HAVE_AESCCM)
 +        ret = wc_AesInit(context->aes, NULL, INVALID_DEVID);
-+    #ifdef WOLFSSL_SE050
++    #ifdef SSS_WOLFSSL_AES_HAS_USESWCRYPT
 +        if (ret == 0) {
 +            /* HostCrypto should use software crypto, not SE05x */
 +            context->aes->useSWCrypt = 1;
@@ -5242,7 +5247,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +
 +#if !defined(NO_AES) && defined(HAVE_AESGCM) && defined(WOLFSSL_AESGCM_STREAM)
 +    ret = wc_AesInit(context->aes, NULL, INVALID_DEVID);
-+    #ifdef WOLFSSL_SE050
++    #ifdef SSS_WOLFSSL_AES_HAS_USESWCRYPT
 +    if (ret == 0) {
 +        /* HostCrypto should use software crypto, not SE05x */
 +        context->aes->useSWCrypt = 1;

@@ -5179,10 +5179,10 @@ index 0000000..80a44f4
 +#endif /* SSS_APIS_INC_FSL_SSS_WOLFSSL_TYPES_H_ */
 diff --git a/sss/src/wolfssl/fsl_sss_wolfssl_apis.c b/sss/src/wolfssl/fsl_sss_wolfssl_apis.c
 new file mode 100644
-index 0000000..5a9aa2d
+index 0000000..d1d1a78
 --- /dev/null
 +++ b/sss/src/wolfssl/fsl_sss_wolfssl_apis.c
-@@ -0,0 +1,3424 @@
+@@ -0,0 +1,3429 @@
 +/*
 + *
 + * Copyright 2018-2025 NXP
@@ -5218,6 +5218,11 @@ index 0000000..5a9aa2d
 +#include <string.h>
 +
 +#include "nxLog_sss.h"
++
++/* Record the Aes layout before SCP03-only pruning removes HAVE_AESGCM. */
++#if defined(WOLFSSL_SE050) && defined(HAVE_AESGCM)
++    #define SSS_WOLFSSL_AES_HAS_USESWCRYPT
++#endif
 +
 +#define SSS_WOLFSSL_SCP03_ONLY SSS_HAVE_SE05X_AUTH_PLATFSCP03
 +
@@ -7031,7 +7036,7 @@ index 0000000..5a9aa2d
 +        case kAlgorithm_SSS_AES_CBC:
 +        case kAlgorithm_SSS_AES_CTR:
 +            ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
-+        #ifdef WOLFSSL_SE050
++        #ifdef SSS_WOLFSSL_AES_HAS_USESWCRYPT
 +            if (ret == 0) {
 +                /* HostCrypto should use software crypto, not SE05x */
 +                aes.useSWCrypt = 1;
@@ -7311,7 +7316,7 @@ index 0000000..5a9aa2d
 +    if (context->algorithm == kAlgorithm_SSS_AES_GCM) {
 +#if !defined(NO_AES) && defined(HAVE_AESGCM)
 +        ret = wc_AesInit(context->aes, NULL, INVALID_DEVID);
-+    #ifdef WOLFSSL_SE050
++    #ifdef SSS_WOLFSSL_AES_HAS_USESWCRYPT
 +        if (ret == 0) {
 +            /* HostCrypto should use software crypto, not SE05x */
 +            context->aes->useSWCrypt = 1;
@@ -7345,7 +7350,7 @@ index 0000000..5a9aa2d
 +    else if (context->algorithm == kAlgorithm_SSS_AES_CCM) {
 +#if !defined(NO_AES) && defined(HAVE_AESCCM)
 +        ret = wc_AesInit(context->aes, NULL, INVALID_DEVID);
-+    #ifdef WOLFSSL_SE050
++    #ifdef SSS_WOLFSSL_AES_HAS_USESWCRYPT
 +        if (ret == 0) {
 +            /* HostCrypto should use software crypto, not SE05x */
 +            context->aes->useSWCrypt = 1;
@@ -7405,7 +7410,7 @@ index 0000000..5a9aa2d
 +
 +#if !defined(NO_AES) && defined(HAVE_AESGCM) && defined(WOLFSSL_AESGCM_STREAM)
 +    ret = wc_AesInit(context->aes, NULL, INVALID_DEVID);
-+    #ifdef WOLFSSL_SE050
++    #ifdef SSS_WOLFSSL_AES_HAS_USESWCRYPT
 +    if (ret == 0) {
 +        /* HostCrypto should use software crypto, not SE05x */
 +        context->aes->useSWCrypt = 1;
