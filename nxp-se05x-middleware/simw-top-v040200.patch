@@ -3023,7 +3023,7 @@ diff -Naur simw-top/sss/src/keystore/keystore_pc.c /home/pi/se_mw/simw-top/sss/s
 diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c
 --- simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c	1969-12-31 17:00:00.000000000 -0700
 +++ /home/pi/se_mw/simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c	2022-11-11 10:27:06.335662156 -0700
-@@ -0,0 +1,3423 @@
+@@ -0,0 +1,3429 @@
 +/*
 + *
 + * Copyright 2018-2020 NXP
@@ -3107,8 +3107,10 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +
 +static sss_status_t sss_wolfssl_generate_rsa_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen);
++#ifdef HAVE_ECC
 +static sss_status_t sss_wolfssl_generate_ecc_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen);
++#endif
 +static sss_status_t sss_wolfssl_generate_ec_mont_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen);
 +static sss_status_t sss_wolfssl_generate_ed_key(
@@ -4106,11 +4108,13 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +
 +    switch (cipher_type) {
 +#if SSSFTR_SW_ECC
++#ifdef HAVE_ECC
 +        case kSSS_CipherType_EC_NIST_P:
 +        case kSSS_CipherType_EC_NIST_K:
 +        case kSSS_CipherType_EC_BRAINPOOL:
 +            retval = sss_wolfssl_generate_ecc_key(keyObject, keyBitLen);
 +            break;
++#endif
 +        case kSSS_CipherType_EC_MONTGOMERY:
 +            retval = sss_wolfssl_generate_ec_mont_key(keyObject, keyBitLen);
 +            break;
@@ -6201,6 +6205,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +/* ************************************************************************** */
 +/* Functions : Private sss wolfssl functions                                  */
 +/* ************************************************************************** */
++#ifdef HAVE_ECC
 +static sss_status_t sss_wolfssl_generate_ecc_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen)
 +{
@@ -6313,6 +6318,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +
 +    return retval;
 +}
++#endif
 +
 +static sss_status_t sss_wolfssl_generate_ec_mont_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen)

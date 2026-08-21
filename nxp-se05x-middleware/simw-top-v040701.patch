@@ -5182,7 +5182,7 @@ new file mode 100644
 index 0000000..d1d1a78
 --- /dev/null
 +++ b/sss/src/wolfssl/fsl_sss_wolfssl_apis.c
-@@ -0,0 +1,3429 @@
+@@ -0,0 +1,3435 @@
 +/*
 + *
 + * Copyright 2018-2025 NXP
@@ -5266,8 +5266,10 @@ index 0000000..d1d1a78
 +
 +static sss_status_t sss_wolfssl_generate_rsa_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen);
++#ifdef HAVE_ECC
 +static sss_status_t sss_wolfssl_generate_ecc_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen);
++#endif
 +static sss_status_t sss_wolfssl_generate_ec_mont_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen);
 +static sss_status_t sss_wolfssl_generate_ed_key(
@@ -6265,11 +6267,13 @@ index 0000000..d1d1a78
 +
 +    switch (cipher_type) {
 +#if SSSFTR_SW_ECC
++#ifdef HAVE_ECC
 +        case kSSS_CipherType_EC_NIST_P:
 +        case kSSS_CipherType_EC_NIST_K:
 +        case kSSS_CipherType_EC_BRAINPOOL:
 +            retval = sss_wolfssl_generate_ecc_key(keyObject, keyBitLen);
 +            break;
++#endif
 +        case kSSS_CipherType_EC_MONTGOMERY:
 +            retval = sss_wolfssl_generate_ec_mont_key(keyObject, keyBitLen);
 +            break;
@@ -8366,6 +8370,7 @@ index 0000000..d1d1a78
 +/* ************************************************************************** */
 +/* Functions : Private sss wolfssl functions                                  */
 +/* ************************************************************************** */
++#ifdef HAVE_ECC
 +static sss_status_t sss_wolfssl_generate_ecc_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen)
 +{
@@ -8478,6 +8483,7 @@ index 0000000..d1d1a78
 +
 +    return retval;
 +}
++#endif
 +
 +static sss_status_t sss_wolfssl_generate_ec_mont_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen)
