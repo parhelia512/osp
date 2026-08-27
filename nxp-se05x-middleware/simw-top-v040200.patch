@@ -3023,7 +3023,7 @@ diff -Naur simw-top/sss/src/keystore/keystore_pc.c /home/pi/se_mw/simw-top/sss/s
 diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c
 --- simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c	1969-12-31 17:00:00.000000000 -0700
 +++ /home/pi/se_mw/simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c	2022-11-11 10:27:06.335662156 -0700
-@@ -0,0 +1,3298 @@
+@@ -0,0 +1,3456 @@
 +/*
 + *
 + * Copyright 2018-2020 NXP
@@ -3060,6 +3060,45 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +
 +#include "nxLog_sss.h"
 +
++/* Record the Aes layout before SCP03-only pruning removes HAVE_AESGCM. */
++#if defined(WOLFSSL_SE050) && defined(HAVE_AESGCM)
++    #define SSS_WOLFSSL_AES_HAS_SE050_FIELDS
++#endif
++
++#define SSS_WOLFSSL_SCP03_ONLY SSS_HAVE_SE05X_AUTH_PLATFSCP03
++
++/* A pure Platform SCP03 build only needs AES-CBC, CMAC and the RNG used to
++ * create the host challenge. Keep the complete SSS API surface available,
++ * but do not make the unused implementations reference other wolfCrypt
++ * algorithms. This is intentionally done after the wolfSSL headers have been
++ * included so the library configuration and public type layouts stay intact. */
++#if SSS_WOLFSSL_SCP03_ONLY
++    #undef SSSFTR_SW_ECC
++    #define SSSFTR_SW_ECC 0
++    #undef SSSFTR_SW_RSA
++    #define SSSFTR_SW_RSA 0
++    #ifndef NO_RSA
++        #define NO_RSA
++    #endif
++    #ifndef NO_HMAC
++        #define NO_HMAC
++    #endif
++    #ifndef NO_DES3
++        #define NO_DES3
++    #endif
++    #undef HAVE_ECC
++    #undef HAVE_CURVE25519
++    #undef HAVE_CURVE448
++    #undef HAVE_ED25519
++    #undef HAVE_HKDF
++    #undef HAVE_AES_ECB
++    #undef WOLFSSL_AES_COUNTER
++    #undef HAVE_AESGCM
++    #undef WOLFSSL_AESGCM
++    #undef HAVE_AESCCM
++    #undef WOLFSSL_CCM
++#endif
++
 +#define MAX_KEY_OBJ_COUNT KS_N_ENTIRES
 +#define MAX_FILE_NAME_SIZE 255
 +#define MAX_SHARED_SECRET_DERIVED_DATA 255
@@ -3068,14 +3107,20 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +/* Functions : Private sss wolfSSL declaration                                */
 +/* ************************************************************************** */
 +
++#if SSSFTR_SW_RSA
 +static sss_status_t sss_wolfssl_generate_rsa_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen);
++#endif
++#ifdef HAVE_ECC
 +static sss_status_t sss_wolfssl_generate_ecc_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen);
++#endif
++#if SSSFTR_SW_ECC
 +static sss_status_t sss_wolfssl_generate_ec_mont_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen);
 +static sss_status_t sss_wolfssl_generate_ed_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen);
++#endif
 +
 +#ifndef NO_HMAC
 +static int sss_wolfssl_get_hmac_type_from_algo(int algo);
@@ -3674,6 +3719,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    }
 +#else
 +    LOG_E("wolfSSL not compiled with HAVE_HKDF");
++    retval = kStatus_SSS_Fail;
 +#endif /* HAVE_HKDF */
 +    return retval;
 +}
@@ -3682,7 +3728,9 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    sss_wolfssl_object_t *otherPartyKeyObject,
 +    sss_wolfssl_object_t *derivedKeyObject)
 +{
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    int ret = 0;
++#endif
 +    sss_status_t retval = kStatus_SSS_Fail;
 +#ifdef HAVE_ECC
 +    ecc_key* ecKeyPrv = NULL;
@@ -3696,7 +3744,9 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +   curve448_key* keyPrv448 = NULL;
 +   curve448_key* keyExt448 = NULL;
 +#endif
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    size_t sharedSecretLen;
++#endif
 +    unsigned int sharedSecretLen_Derived;
 +    uint8_t *secret     = NULL;
 +
@@ -4069,11 +4119,13 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +
 +    switch (cipher_type) {
 +#if SSSFTR_SW_ECC
++#ifdef HAVE_ECC
 +        case kSSS_CipherType_EC_NIST_P:
 +        case kSSS_CipherType_EC_NIST_K:
 +        case kSSS_CipherType_EC_BRAINPOOL:
 +            retval = sss_wolfssl_generate_ecc_key(keyObject, keyBitLen);
 +            break;
++#endif
 +        case kSSS_CipherType_EC_MONTGOMERY:
 +            retval = sss_wolfssl_generate_ec_mont_key(keyObject, keyBitLen);
 +            break;
@@ -4101,7 +4153,9 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    size_t *pKeyBitLen)
 +{
 +    sss_status_t retval = kStatus_SSS_Fail;
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    int ret = 0;
++#endif
 +#ifndef NO_RSA
 +    RsaKey* rsaKey = NULL;
 +#endif
@@ -4474,6 +4528,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    uint8_t *destData, size_t *destLen)
 +{
 +    sss_status_t retval = kStatus_SSS_Fail;
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    sss_wolfssl_object_t *keyObj = context->keyObject;
 +    int ret      = 0;
 +    int padding  = 0;
@@ -4506,6 +4561,13 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    }
 +
 +    wc_FreeRng(&rng);
++#else
++    (void)context;
++    (void)srcData;
++    (void)srcLen;
++    (void)destData;
++    (void)destLen;
++#endif
 +
 +    return retval;
 +}
@@ -4515,6 +4577,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    uint8_t *destData, size_t *destLen)
 +{
 +    sss_status_t retval = kStatus_SSS_Fail;
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    sss_wolfssl_object_t *keyObj = context->keyObject;
 +    int ret     = 0;
 +    int padding = 0;
@@ -4539,6 +4602,13 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +        *destLen = ret;
 +        retval = kStatus_SSS_Success;
 +    }
++#else
++    (void)context;
++    (void)srcData;
++    (void)srcLen;
++    (void)destData;
++    (void)destLen;
++#endif
 +
 +    return retval;
 +}
@@ -4548,6 +4618,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    uint8_t *signature, size_t *signatureLen)
 +{
 +    sss_status_t retval = kStatus_SSS_Fail;
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    int ret      = 0;
 +    int padding  = 0;
 +    int mgf      = 0;
@@ -4637,6 +4708,13 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    }
 +
 +    wc_FreeRng(&rng);
++#else
++    (void)context;
++    (void)digest;
++    (void)digestLen;
++    (void)signature;
++    (void)signatureLen;
++#endif
 +
 +    return retval;
 +}
@@ -4646,6 +4724,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    uint8_t *signature, size_t signatureLen)
 +{
 +    sss_status_t retval = kStatus_SSS_Fail;
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    int ret      = 0;
 +    int padding  = 0;
 +    int mgf      = 0;
@@ -4746,6 +4825,13 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +            LOG_E("Unsupported cipherType for digest sign");
 +            break;
 +    }
++#else
++    (void)context;
++    (void)digest;
++    (void)digestLen;
++    (void)signature;
++    (void)signatureLen;
++#endif
 +
 +    return retval;
 +
@@ -4797,6 +4883,12 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    Des3 des3;
 +#endif
 +
++#if SSS_WOLFSSL_SCP03_ONLY
++    if (context->algorithm != kAlgorithm_SSS_AES_CBC) {
++        return retval;
++    }
++#endif
++
 +    /* Set encrypt/decrypt key */
 +    switch (context->algorithm) {
 +#ifndef NO_AES
@@ -4804,7 +4896,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +        case kAlgorithm_SSS_AES_CBC:
 +        case kAlgorithm_SSS_AES_CTR:
 +            ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
-+        #ifdef WOLFSSL_SE050
++        #ifdef SSS_WOLFSSL_AES_HAS_SE050_FIELDS
 +            if (ret == 0) {
 +                /* HostCrypto should use software crypto, not SE05x */
 +                aes.useSWCrypt = 1;
@@ -5067,7 +5159,9 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    size_t *tagLen)
 +{
 +    sss_status_t retval = kStatus_SSS_Fail;
++#if !SSS_WOLFSSL_SCP03_ONLY
 +    int ret = 0;
++#endif
 +
 +    ENSURE_OR_GO_EXIT(context != NULL);
 +    if (size > 0) {
@@ -5084,7 +5178,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    if (context->algorithm == kAlgorithm_SSS_AES_GCM) {
 +#if !defined(NO_AES) && defined(HAVE_AESGCM)
 +        ret = wc_AesInit(context->aes, NULL, INVALID_DEVID);
-+    #ifdef WOLFSSL_SE050
++    #ifdef SSS_WOLFSSL_AES_HAS_SE050_FIELDS
 +        if (ret == 0) {
 +            /* HostCrypto should use software crypto, not SE05x */
 +            context->aes->useSWCrypt = 1;
@@ -5118,7 +5212,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    else if (context->algorithm == kAlgorithm_SSS_AES_CCM) {
 +#if !defined(NO_AES) && defined(HAVE_AESCCM)
 +        ret = wc_AesInit(context->aes, NULL, INVALID_DEVID);
-+    #ifdef WOLFSSL_SE050
++    #ifdef SSS_WOLFSSL_AES_HAS_SE050_FIELDS
 +        if (ret == 0) {
 +            /* HostCrypto should use software crypto, not SE05x */
 +            context->aes->useSWCrypt = 1;
@@ -5178,7 +5272,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +
 +#if !defined(NO_AES) && defined(HAVE_AESGCM) && defined(WOLFSSL_AESGCM_STREAM)
 +    ret = wc_AesInit(context->aes, NULL, INVALID_DEVID);
-+    #ifdef WOLFSSL_SE050
++    #ifdef SSS_WOLFSSL_AES_HAS_SE050_FIELDS
 +    if (ret == 0) {
 +        /* HostCrypto should use software crypto, not SE05x */
 +        context->aes->useSWCrypt = 1;
@@ -5520,7 +5614,9 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    uint8_t *mac, size_t *macLen)
 +{
 +    int ret = 0;
++#ifndef NO_HMAC
 +    int hashType;
++#endif
 +    unsigned int outSz;
 +    sss_status_t retval = kStatus_SSS_Fail;
 +
@@ -5831,6 +5927,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +/* Functions : sss_wolfssl_md                                                 */
 +/* ************************************************************************** */
 +
++#if !SSS_WOLFSSL_SCP03_ONLY
 +sss_status_t sss_wolfssl_digest_context_init(
 +    sss_wolfssl_digest_t *context, sss_wolfssl_session_t *session,
 +    sss_algorithm_t algorithm, sss_mode_t mode)
@@ -6003,6 +6100,61 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    }
 +    memset(context, 0, sizeof(*context));
 +}
++#else
++sss_status_t sss_wolfssl_digest_context_init(
++    sss_wolfssl_digest_t *context, sss_wolfssl_session_t *session,
++    sss_algorithm_t algorithm, sss_mode_t mode)
++{
++    (void)context;
++    (void)session;
++    (void)algorithm;
++    (void)mode;
++    return kStatus_SSS_Fail;
++}
++
++sss_status_t sss_wolfssl_digest_one_go(
++    sss_wolfssl_digest_t *context, const uint8_t *message, size_t messageLen,
++    uint8_t *digest, size_t *digestLen)
++{
++    (void)context;
++    (void)message;
++    (void)messageLen;
++    (void)digest;
++    (void)digestLen;
++    return kStatus_SSS_Fail;
++}
++
++sss_status_t sss_wolfssl_digest_init(sss_wolfssl_digest_t *context)
++{
++    (void)context;
++    return kStatus_SSS_Fail;
++}
++
++sss_status_t sss_wolfssl_digest_update(sss_wolfssl_digest_t *context,
++    const uint8_t *message, size_t messageLen)
++{
++    (void)context;
++    (void)message;
++    (void)messageLen;
++    return kStatus_SSS_Fail;
++}
++
++sss_status_t sss_wolfssl_digest_finish(sss_wolfssl_digest_t *context,
++    uint8_t *digest, size_t *digestLen)
++{
++    (void)context;
++    (void)digest;
++    (void)digestLen;
++    return kStatus_SSS_Fail;
++}
++
++void sss_wolfssl_digest_context_free(sss_wolfssl_digest_t *context)
++{
++    if (context != NULL) {
++        memset(context, 0, sizeof(*context));
++    }
++}
++#endif /* !SSS_WOLFSSL_SCP03_ONLY */
 +
 +/* End: wolfssl_md */
 +
@@ -6076,6 +6228,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +/* ************************************************************************** */
 +/* Functions : Private sss wolfssl functions                                  */
 +/* ************************************************************************** */
++#ifdef HAVE_ECC
 +static sss_status_t sss_wolfssl_generate_ecc_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen)
 +{
@@ -6188,7 +6341,9 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +
 +    return retval;
 +}
++#endif
 +
++#if SSSFTR_SW_ECC
 +static sss_status_t sss_wolfssl_generate_ec_mont_key(
 +    sss_wolfssl_object_t *keyObject, size_t keyBitLen)
 +{
@@ -6283,7 +6438,9 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +
 +    return retval;
 +}
++#endif
 +
++#if SSSFTR_SW_RSA
 +#ifdef _MSC_VER
 +#pragma warning(disable : 4127)
 +#endif
@@ -6320,6 +6477,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +
 +    return retval;
 +}
++#endif
 +
 +#endif /* SSS_HAVE_HOSTCRYPTO_WOLFSSL */
 diff -Naur simw-top/sss/sssAkmLists.mk /home/pi/se_mw/simw-top/sss/sssAkmLists.mk
