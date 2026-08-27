@@ -5179,10 +5179,10 @@ index 0000000..80a44f4
 +#endif /* SSS_APIS_INC_FSL_SSS_WOLFSSL_TYPES_H_ */
 diff --git a/sss/src/wolfssl/fsl_sss_wolfssl_apis.c b/sss/src/wolfssl/fsl_sss_wolfssl_apis.c
 new file mode 100644
-index 0000000..bc3b972
+index 0000000..f24658e
 --- /dev/null
 +++ b/sss/src/wolfssl/fsl_sss_wolfssl_apis.c
-@@ -0,0 +1,3453 @@
+@@ -0,0 +1,3462 @@
 +/*
 + *
 + * Copyright 2018-2025 NXP
@@ -5250,6 +5250,8 @@ index 0000000..bc3b972
 +    #undef HAVE_CURVE448
 +    #undef HAVE_ED25519
 +    #undef HAVE_HKDF
++    #undef HAVE_AES_ECB
++    #undef WOLFSSL_AES_COUNTER
 +    #undef HAVE_AESGCM
 +    #undef WOLFSSL_AESGCM
 +    #undef HAVE_AESCCM
@@ -5876,6 +5878,7 @@ index 0000000..bc3b972
 +    }
 +#else
 +    LOG_E("wolfSSL not compiled with HAVE_HKDF");
++    retval = kStatus_SSS_Fail;
 +#endif /* HAVE_HKDF */
 +    return retval;
 +}
@@ -7041,6 +7044,12 @@ index 0000000..bc3b972
 +#ifndef NO_DES3
 +    Des  des;
 +    Des3 des3;
++#endif
++
++#if SSS_WOLFSSL_SCP03_ONLY
++    if (context->algorithm != kAlgorithm_SSS_AES_CBC) {
++        return retval;
++    }
 +#endif
 +
 +    /* Set encrypt/decrypt key */

@@ -3023,7 +3023,7 @@ diff -Naur simw-top/sss/src/keystore/keystore_pc.c /home/pi/se_mw/simw-top/sss/s
 diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c
 --- simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c	1969-12-31 17:00:00.000000000 -0700
 +++ /home/pi/se_mw/simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c	2022-11-11 10:27:06.335662156 -0700
-@@ -0,0 +1,3447 @@
+@@ -0,0 +1,3456 @@
 +/*
 + *
 + * Copyright 2018-2020 NXP
@@ -3091,6 +3091,8 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    #undef HAVE_CURVE448
 +    #undef HAVE_ED25519
 +    #undef HAVE_HKDF
++    #undef HAVE_AES_ECB
++    #undef WOLFSSL_AES_COUNTER
 +    #undef HAVE_AESGCM
 +    #undef WOLFSSL_AESGCM
 +    #undef HAVE_AESCCM
@@ -3717,6 +3719,7 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +    }
 +#else
 +    LOG_E("wolfSSL not compiled with HAVE_HKDF");
++    retval = kStatus_SSS_Fail;
 +#endif /* HAVE_HKDF */
 +    return retval;
 +}
@@ -4878,6 +4881,12 @@ diff -Naur simw-top/sss/src/wolfssl/fsl_sss_wolfssl_apis.c /home/pi/se_mw/simw-t
 +#ifndef NO_DES3
 +    Des  des;
 +    Des3 des3;
++#endif
++
++#if SSS_WOLFSSL_SCP03_ONLY
++    if (context->algorithm != kAlgorithm_SSS_AES_CBC) {
++        return retval;
++    }
 +#endif
 +
 +    /* Set encrypt/decrypt key */
